@@ -83,10 +83,18 @@ function getRowSpan(element: HTMLElement): number {
   if (element.classList.contains('span-3')) return 3;
   if (element.classList.contains('span-2')) return 2;
   if (element.classList.contains('span-1')) return 1;
-  // A natural wide panel already occupies two dashboard rows even when it
-  // has no explicit span-N class. Treat that footprint as the resize baseline
-  // so the first vertical drag changes the visible height instead of being a
-  // no-op against the existing grid-row: span 2 rule.
+
+  // #8276: Use the actual CSS grid span as the resize baseline.
+  // Natural wide video panels may occupy three rows instead of two.
+  // This prevents the first drag from unexpectedly shrinking the panel.
+  const gridRowStart = getComputedStyle(element).gridRowStart;
+  const match = /^span\s+([1-4])(?:\s|$)/.exec(gridRowStart);
+
+  if (match) {
+    return Number(match[1]);
+  }
+
+  // Fallback when the element is not yet attached to the layout.
   return element.classList.contains('panel-wide') ? 2 : 1;
 }
 
@@ -432,7 +440,30 @@ export class Panel {
     handle.setAttribute('aria-label', t('components.panel.dragToResize'));
     handle.setAttribute('aria-valuemin', '1');
     handle.setAttribute('aria-valuemax', '4');
-    this.syncKeyboardRowResizeAria();
+        this.syncKeyboardRowResizeAria();
+
+    // #8276: Refresh ARIA after the natural video panel enters the grid.
+    // Its CSS row span may differ from the detached element's fallback.
+    if (this.panelId === 'live-news' || this.panelId === 'live-webcams') {
+      this.runWhenConnected(() => this.syncKeyboardRowResizeAria());
+
+      // The natural span changes at responsive viewport breakpoints.
+      // AbortController removes this listener when the panel is destroyed.
+      window.addEventListener(
+        'resize',
+        () => {
+          if (this.element.isConnected) {
+            this.syncKeyboardRowResizeAria();
+          }
+        },
+        { signal: this.abortController.signal },
+      );
+    }
+
+    // Also refresh the value before keyboard interaction.
+    handle.addEventListener('focus', () => {
+      this.syncKeyboardRowResizeAria();
+    });
     handle.addEventListener('keydown', (e: KeyboardEvent) => {
       const current = getRowSpan(this.element);
       let next: number | null = null;

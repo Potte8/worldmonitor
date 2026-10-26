@@ -36,7 +36,7 @@ describe('Panel heading outline', () => {
 });
 
 describe('Panel keyboard resize accessibility', () => {
-  it('exposes restored row and column spans as the initial separator values', () => {
+    it('exposes restored row and column spans as the initial separator values', () => {
     savePanelSpan('resize-a11y-probe', 3);
     savePanelColSpan('resize-a11y-probe', 2);
 
@@ -49,6 +49,45 @@ describe('Panel keyboard resize accessibility', () => {
     expect(colHandle?.getAttribute('aria-valuenow')).toBe('2');
 
     panel.destroy();
+  });
+    it('synchronizes natural video panel spans after mounting and viewport resize (#8276)', () => {
+    for (const id of ['live-news', 'live-webcams']) {
+      const panel = new Panel({
+        id,
+        title: id,
+        className: 'panel-wide',
+      });
+
+      const element = panel.getElement();
+      const handle = element.querySelector('.panel-resize-handle');
+
+      // Before mounting, the wide-panel fallback is two rows.
+      expect(handle?.getAttribute('aria-valuenow')).toBe('2');
+
+      // Simulate the natural three-row CSS footprint.
+      element.style.gridRowStart = 'span 3';
+
+      document.body.appendChild(element);
+      panel.notifyConnected();
+
+      expect(getComputedStyle(element).gridRowStart).toBe('span 3');
+      expect(handle?.getAttribute('aria-valuenow')).toBe('3');
+
+      // Simulate the compact viewport layout.
+      element.style.gridRowStart = 'span 2';
+      window.dispatchEvent(new Event('resize'));
+
+      expect(handle?.getAttribute('aria-valuenow')).toBe('2');
+
+      // Return to the regular desktop layout.
+      element.style.gridRowStart = 'span 3';
+      window.dispatchEvent(new Event('resize'));
+
+      expect(handle?.getAttribute('aria-valuenow')).toBe('3');
+
+      panel.destroy();
+      element.remove();
+    }
   });
 
   it('updates separator values when saved dimensions are reset', () => {
