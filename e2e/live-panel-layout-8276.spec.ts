@@ -115,4 +115,10 @@ test('wide live video panels do not overlap adjacent dashboard panels (#8276)', 
       },
     ).toBe(true);
   }
+  await page.setViewportSize({ width: 1600, height: 866 });
+  for (const panel of [news, webcams]) {
+    await panel.locator('.panel-collapse-btn').click();
+    await expect(panel).toHaveClass(/panel-collapsed/);
+    await expect.poll(() => panel.evaluate(element => getComputedStyle(element).gridRowStart)).toBe('span 2');
+  }
 });
