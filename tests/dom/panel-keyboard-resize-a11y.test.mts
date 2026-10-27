@@ -134,6 +134,14 @@ describe('Panel keyboard resize accessibility', () => {
       expect(loadPanelSpans()['live-news']).toBe(3);
       expect(element.classList.contains('resized')).toBe(true);
       expect(element.classList.contains('span-3')).toBe(true);
+
+      start();
+      move(380);
+      move(300);
+      end();
+      expect(loadPanelSpans()['live-news']).toBe(3);
+      expect(element.classList.contains('resized')).toBe(true);
+      expect(element.classList.contains('span-3')).toBe(true);
     } finally {
       panel.destroy();
     }

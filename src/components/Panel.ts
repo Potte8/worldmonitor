@@ -87,11 +87,9 @@ function getRowSpan(element: HTMLElement): number {
   // #8276: Use the actual CSS grid span as the resize baseline.
   // Natural wide video panels may occupy three rows instead of two.
   // This prevents the first drag from unexpectedly shrinking the panel.
-  const gridRowStart = getComputedStyle(element).gridRowStart;
-  const match = /^span\s+([1-4])(?:\s|$)/.exec(gridRowStart);
-
-  if (match) {
-    return Number(match[1]);
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    const match = /^span\s+([1-4])(?:\s|$)/.exec(window.getComputedStyle(element).gridRowStart);
+    if (match) return Number(match[1]);
   }
 
   // Fallback when the element is not yet attached to the layout.
@@ -130,6 +128,7 @@ export class Panel {
   private isResizing = false;
   private startY = 0;
   private startRowSpan = 1;
+  private startRowSpanClasses: string[] = [];
   private onTouchMove: ((e: TouchEvent) => void) | null = null;
   private onTouchEnd: (() => void) | null = null;
   private onTouchCancel: (() => void) | null = null;
@@ -440,7 +439,7 @@ export class Panel {
     handle.setAttribute('aria-label', t('components.panel.dragToResize'));
     handle.setAttribute('aria-valuemin', '1');
     handle.setAttribute('aria-valuemax', '4');
-        this.syncKeyboardRowResizeAria();
+    this.syncKeyboardRowResizeAria();
 
     // #8276: Refresh ARIA after the natural video panel enters the grid.
     // Its CSS row span may differ from the detached element's fallback.
@@ -522,13 +521,22 @@ export class Panel {
     );
   }
 
+  private updateRowResize(deltaY: number): void {
+    const span = deltaToRowSpan(this.startRowSpan, deltaY);
+    if (span === this.startRowSpan) {
+      this.element.classList.remove('span-1', 'span-2', 'span-3', 'span-4', 'resized');
+      this.element.classList.add(...this.startRowSpanClasses);
+    } else {
+      setSpanClass(this.element, span);
+    }
+  }
+
   private setupResizeHandlers(): void {
     if (!this.resizeHandle) return;
 
     this.onRowMouseMove = (e: MouseEvent) => {
       if (!this.isResizing) return;
-      const deltaY = e.clientY - this.startY;
-      setSpanClass(this.element, deltaToRowSpan(this.startRowSpan, deltaY));
+      this.updateRowResize(e.clientY - this.startY);
     };
 
     this.onRowMouseUp = () => {
@@ -549,8 +557,10 @@ export class Panel {
       }
 
       const currentSpan = getRowSpan(this.element);
-      savePanelSpan(this.panelId, currentSpan);
-      if (currentSpan !== this.startRowSpan) trackLayoutCustomized('panel-resize');
+      if (currentSpan !== this.startRowSpan) {
+        savePanelSpan(this.panelId, currentSpan);
+        trackLayoutCustomized('panel-resize');
+      }
       this.syncKeyboardRowResizeAria();
     };
 
@@ -562,6 +572,8 @@ export class Panel {
       this.isResizing = true;
       this.startY = e.clientY;
       this.startRowSpan = getRowSpan(this.element);
+      this.startRowSpanClasses = ['span-1', 'span-2', 'span-3', 'span-4', 'resized']
+        .filter(token => this.element.classList.contains(token));
       this.element.dataset.resizing = 'true';
       this.element.classList.add('resizing');
       document.body.classList.add('panel-resize-active');
@@ -593,6 +605,8 @@ export class Panel {
       this.isResizing = true;
       this.startY = touch.clientY;
       this.startRowSpan = getRowSpan(this.element);
+      this.startRowSpanClasses = ['span-1', 'span-2', 'span-3', 'span-4', 'resized']
+        .filter(token => this.element.classList.contains(token));
       this.element.classList.add('resizing');
       this.element.dataset.resizing = 'true';
       document.body.classList.add('panel-resize-active');
@@ -606,8 +620,7 @@ export class Panel {
       if (!this.isResizing) return;
       const touch = e.touches[0];
       if (!touch) return;
-      const deltaY = touch.clientY - this.startY;
-      setSpanClass(this.element, deltaToRowSpan(this.startRowSpan, deltaY));
+      this.updateRowResize(touch.clientY - this.startY);
     };
 
     this.onTouchEnd = () => {
@@ -622,8 +635,10 @@ export class Panel {
       this.resizeHandle?.classList.remove('active');
       this.removeRowTouchDocumentListeners();
       const currentSpan = getRowSpan(this.element);
-      savePanelSpan(this.panelId, currentSpan);
-      if (currentSpan !== this.startRowSpan) trackLayoutCustomized('panel-resize');
+      if (currentSpan !== this.startRowSpan) {
+        savePanelSpan(this.panelId, currentSpan);
+        trackLayoutCustomized('panel-resize');
+      }
       this.syncKeyboardRowResizeAria();
     };
     this.onTouchCancel = this.onTouchEnd;
